@@ -1,0 +1,12 @@
+customtkinter>=5.2.2
+pygame>=2.5.2
+pydub>=0.25.1
+requests>=2.31.0
+pyperclip>=1.8.2
+Pillow>=10.1.0
+soundfile>=0.12.1
+numpy>=1.26.0
+piper-tts>=1.2.0
+onnxruntime>=1.16.0
+packaging>=23.2
+pyinstaller>=6.3.0
