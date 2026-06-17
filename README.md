@@ -11,12 +11,14 @@ We use GitHub Actions (free cloud servers) to build the `.exe` automatically for
 
 **Step-by-step guide:** See [`GITHUB_BUILD_GUIDE.md`](GITHUB_BUILD_GUIDE.md) for a complete walkthrough with screenshots. In short:
 1. Upload this project to a new **public** GitHub repository
-2. Go to **Actions → Build VoiceCraft Installer → Run workflow**
-3. Wait ~10 minutes while a free Windows server builds everything
-4. Download `VoiceCraft_Setup.exe` from **Artifacts** or **Releases**
-5. Run it on any Windows PC — works offline immediately!
+2. Go to **Actions → Build VoiceCraft (Simple) → Run workflow**
+3. Wait ~3 minutes while a free Windows server builds the portable `.exe`
+4. Download `VoiceCraft_TTS_Portable.zip` from **Artifacts**
+5. Run it on any Windows PC!
 
-> The installer includes **30+ pre-bundled Piper voices** so the app works offline immediately. No Python, no dependencies, no internet required for basic use.
+> ⚠️ **Note:** The "Simple" build creates a **portable `.exe` without voices bundled**. See the **Offline Voice Pack** section below to download voices for offline use.
+
+> For an installer with voices pre-bundled, use the `Build VoiceCraft Installer` workflow (may take 10–15 min and can fail on voice downloads).
 
 ### Option B: One-Click Build on Your PC
 If you want to build it yourself or customize the voice pack:
@@ -73,6 +75,20 @@ Piper voices (🆓/✅ icons) work **without any API keys or internet**.
 
 ---
 
+## 📦 Offline Voice Pack (For PCs Without Internet)
+
+The **GitHub Actions "Simple" build** creates a portable `.exe` but does **not** include voice models inside it. To use the app on a PC with **no internet**, you need to download the voices separately on an **online PC** and transfer them.
+
+### Quick Steps
+1. **Online PC:** Run `bundle/download_voices_pack.bat` → Creates `VoiceCraft_Voices.zip` (~150–300 MB)
+2. **Transfer:** Copy `VoiceCraft_TTS.exe` + `VoiceCraft_Voices.zip` to the offline PC (USB, email, etc.)
+3. **Offline PC:** Run `bundle/install_voices_offline.bat` (or extract ZIP manually to `~/.voicecraft_tts/piper_voices/`)
+4. **Launch:** Open `VoiceCraft_TTS.exe` — all voices show the ✅ icon and work offline!
+
+**Full guide:** See [`OFFLINE_VOICE_PACK_GUIDE.md`](OFFLINE_VOICE_PACK_GUIDE.md)
+
+---
+
 ## 📁 Project Structure
 
 ```
@@ -95,6 +111,8 @@ tts_app/
 │
 ├── bundle/
 │   ├── ONE_CLICK_BUILD_WINDOWS.bat   # Windows auto-builder
+│   ├── download_voices_pack.bat      # Download voice pack for offline PCs
+│   ├── install_voices_offline.bat    # Install voice pack on offline PC
 │   ├── prepare_offline_voices.py     # Pre-download voice pack
 │   ├── pyinstaller_offline.spec      # PyInstaller spec (bundles voices)
 │   └── installer.iss                 # Inno Setup professional installer

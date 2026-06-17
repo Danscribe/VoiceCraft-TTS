@@ -1,6 +1,7 @@
 """Central voice registry with 300+ voice slots across providers."""
 
 VOICE_CATEGORIES = {
+    "Built-in Windows Voices": "sapi",
     "Piper Offline (Free)": "piper",
     "Deepgram Aura": "deepgram",
     "Fish Audio": "fish_audio",

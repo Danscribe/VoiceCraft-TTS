@@ -12,6 +12,7 @@ from config.voice_data import get_all_voices, get_voice_by_id, EMOTIONS, VOICE_C
 from tts.audio_player import AudioPlayer
 from tts.piper_engine import synthesize as piper_synthesize, download_voice, get_voice_path, _get_bundle_dir
 from tts.api_providers import DeepgramProvider, FishAudioProvider, TopMediaProvider
+from tts.sapi_engine import get_system_voices, synthesize as sapi_synthesize, is_available as sapi_available
 from ui.welcome_dialog import maybe_show_welcome
 
 ctk.set_appearance_mode("dark")
@@ -44,7 +45,14 @@ class VoiceCraftApp(ctk.CTk):
             "topmedia_ai": TopMediaProvider(self.config_manager.get_api_key("topmedia_ai"))
         }
         
+        # Build base voice list from config + detect Windows SAPI voices
         self.all_voices = get_all_voices()
+        
+        # Detect Windows built-in voices (zero download, always offline)
+        if sapi_available():
+            sapi_voices = get_system_voices()
+            self.all_voices = sapi_voices + self.all_voices
+        
         self.filtered_voices = self.all_voices.copy()
         
         self.build_ui()
@@ -237,7 +245,9 @@ class VoiceCraftApp(ctk.CTk):
         
         self.voice_list.delete(0, "end")
         for v in self.filtered_voices:
-            if v["provider"] == "piper":
+            if v["provider"] == "sapi":
+                tag = "🏠"  # Built-in Windows voice, always offline
+            elif v["provider"] == "piper":
                 if v["id"] in self._bundled_voices:
                     tag = "✅"  # Bundled, ready offline
                 elif get_voice_path(v["id"]):
@@ -256,7 +266,9 @@ class VoiceCraftApp(ctk.CTk):
         info = f"{voice['name']} | {voice['lang'].upper()} | {voice['gender'].title()} | {voice['quality'].title()}"
         
         # Offline status indicator
-        if voice["provider"] == "piper":
+        if voice["provider"] == "sapi":
+            info += " | 🏠 Built-in Windows Voice (Always Offline)"
+        elif voice["provider"] == "piper":
             if voice["id"] in self._bundled_voices:
                 info += " | ✅ Bundled (Offline Ready)"
             elif get_voice_path(voice["id"]):
@@ -331,7 +343,9 @@ class VoiceCraftApp(ctk.CTk):
             pitch = self.pitch_var.get()
             emotion = self.emotion_var.get()
             
-            if voice["provider"] == "piper":
+            if voice["provider"] == "sapi":
+                sapi_synthesize(text, voice.get("engine_id", 0), output_path, speed=speed, pitch=pitch)
+            elif voice["provider"] == "piper":
                 piper_synthesize(text, voice["id"], output_path, speed=speed, pitch=pitch)
             elif voice["provider"] == "deepgram":
                 self.providers["deepgram"].api_key = self.config_manager.get_api_key("deepgram")

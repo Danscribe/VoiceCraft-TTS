@@ -26,8 +26,14 @@ class WelcomeDialog(ctk.CTkToplevel):
         
         # Offline status
         bundled = self._count_bundled_voices()
-        if bundled > 0:
-            status_text = f"✅ {bundled} offline voices are bundled and ready to use!"
+        try:
+            from tts.sapi_engine import get_system_voices
+            sapi_count = len(get_system_voices())
+        except Exception:
+            sapi_count = 0
+        
+        if bundled > 0 or sapi_count > 0:
+            status_text = f"✅ {sapi_count} Windows voices + {bundled} bundled voices ready instantly!"
             status_color = "#00a8e8"
         else:
             status_text = "ℹ️ No bundled voices found. You can download voices from the sidebar."
@@ -38,13 +44,16 @@ class WelcomeDialog(ctk.CTkToplevel):
         # Info boxes
         info_frame = ctk.CTkFrame(frame)
         info_frame.grid(row=3, column=0, sticky="ew", pady=(0, 15))
-        info_frame.grid_columnconfigure((0, 1), weight=1)
+        info_frame.grid_columnconfigure((0, 1, 2), weight=1)
         
-        ctk.CTkLabel(info_frame, text="🆓 Offline Voices", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, padx=15, pady=(10, 5))
-        ctk.CTkLabel(info_frame, text="Piper voices work without internet.\nSelect any 🆓 voice in the sidebar.", font=ctk.CTkFont(size=12), wraplength=200).grid(row=1, column=0, padx=15, pady=(0, 10))
+        ctk.CTkLabel(info_frame, text="🏠 Windows Voices", font=ctk.CTkFont(weight="bold")).grid(row=0, column=0, padx=10, pady=(10, 5))
+        ctk.CTkLabel(info_frame, text="Built-in voices that work instantly.\nNo download, no internet needed.", font=ctk.CTkFont(size=12), wraplength=180).grid(row=1, column=0, padx=10, pady=(0, 10))
         
-        ctk.CTkLabel(info_frame, text="☁ Cloud Voices", font=ctk.CTkFont(weight="bold")).grid(row=0, column=1, padx=15, pady=(10, 5))
-        ctk.CTkLabel(info_frame, text="Deepgram, Fish Audio, TopMedia AI.\nAdd API keys in Settings → API Keys.", font=ctk.CTkFont(size=12), wraplength=200).grid(row=1, column=1, padx=15, pady=(0, 10))
+        ctk.CTkLabel(info_frame, text="🆓 Offline Voices", font=ctk.CTkFont(weight="bold")).grid(row=0, column=1, padx=10, pady=(10, 5))
+        ctk.CTkLabel(info_frame, text="Piper voices work without internet.\nSelect any 🆓 or ✅ voice in the sidebar.", font=ctk.CTkFont(size=12), wraplength=180).grid(row=1, column=1, padx=10, pady=(0, 10))
+        
+        ctk.CTkLabel(info_frame, text="☁ Cloud Voices", font=ctk.CTkFont(weight="bold")).grid(row=0, column=2, padx=10, pady=(10, 5))
+        ctk.CTkLabel(info_frame, text="Deepgram, Fish Audio, TopMedia AI.\nAdd API keys in Settings → API Keys.", font=ctk.CTkFont(size=12), wraplength=180).grid(row=1, column=2, padx=10, pady=(0, 10))
         
         # Quick tips
         ctk.CTkLabel(frame, text="Quick Tips", font=ctk.CTkFont(size=14, weight="bold")).grid(row=4, column=0, pady=(10, 5), sticky="w")
