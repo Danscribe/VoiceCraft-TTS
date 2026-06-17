@@ -1,0 +1,225 @@
+name: Build VoiceCraft Installer (Simple)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Detect project root
+        id: detect
+        run: |
+          if (Test-Path "tts_app/main.py") {
+            "root=tts_app" >> $env:GITHUB_OUTPUT
+          } else {
+            "root=." >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: ${{ steps.detect.outputs.root }}
+        run: |
+          python -m pip install --upgrade pip
+          pip install customtkinter pygame pydub requests pyperclip Pillow soundfile numpy pyinstaller
+          # Note: piper-tts and onnxruntime may fail on Windows CI - skip for now
+
+      - name: Build EXE (no voices bundled)
+        working-directory: ${{ steps.detect.outputs.root }}
+        run: |
+          pyinstaller main.py --name=VoiceCraft_TTS --onefile --windowed --clean --noconfirm `
+            --hidden-import=customtkinter --hidden-import=pygame --hidden-import=pydub `
+            --hidden-import=requests --hidden-import=pyperclip --hidden-import=PIL `
+            --hidden-import=soundfile --hidden-import=numpy
+
+      - name: Upload Portable EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: VoiceCraft_TTS_Portable
+          path: ${{ steps.detect.outputs.root }}/dist/VoiceCraft_TTS.exe
+
+      - name: Show success message
+        run: |
+          echo "✅ Build complete! Download the portable .exe from the Artifacts section above."
+          echo "Note: Voices will download on first use when you run the app."
+
+name: Build VoiceCraft Installer
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ======= DIAGNOSTIC: Check file structure =======
+      - name: Check repo structure
+        run: |
+          echo "=== ROOT FILES ==="
+          Get-ChildItem -Path . -File | Select-Object Name
+          echo ""
+          echo "=== CHECKING FOR tts_app SUBFOLDER ==="
+          if (Test-Path "tts_app") {
+            echo "FOUND tts_app/ subfolder - will adjust paths"
+            Get-ChildItem -Path "tts_app" -File | Select-Object Name
+          } else {
+            echo "No tts_app subfolder - files at root"
+          }
+          echo ""
+          echo "=== CHECKING requirements.txt ==="
+          if (Test-Path "requirements.txt") {
+            echo "requirements.txt at root: OK"
+          } elseif (Test-Path "tts_app/requirements.txt") {
+            echo "requirements.txt in tts_app/: OK"
+          } else {
+            echo "WARNING: requirements.txt not found!"
+          }
+
+      # ======= SET WORKING DIRECTORY =======
+      - name: Set working directory
+        id: setdir
+        run: |
+          if (Test-Path "tts_app/main.py") {
+            echo "tts_app=tts_app" >> $env:GITHUB_OUTPUT
+            echo "Using tts_app/ as working directory"
+          } else {
+            echo "tts_app=." >> $env:GITHUB_OUTPUT
+            echo "Using root as working directory"
+          }
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        working-directory: ${{ steps.setdir.outputs.tts_app }}
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Download offline voice pack (with retry)
+        working-directory: ${{ steps.setdir.outputs.tts_app }}
+        run: |
+          $maxAttempts = 3
+          $attempt = 1
+          while ($attempt -le $maxAttempts) {
+            Write-Host "=== Attempt $attempt of $maxAttempts ==="
+            python bundle/prepare_offline_voices.py
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Voice download succeeded!"
+              break
+            } else {
+              Write-Host "Voice download failed, waiting 30 seconds..."
+              Start-Sleep -Seconds 30
+              $attempt++
+            }
+          }
+          if ($attempt -gt $maxAttempts) {
+            Write-Host "WARNING: Voice download failed after $maxAttempts attempts."
+            Write-Host "Continuing with whatever voices were successfully downloaded..."
+          }
+
+      - name: Build with PyInstaller
+        working-directory: ${{ steps.setdir.outputs.tts_app }}
+        run: |
+          pyinstaller bundle/pyinstaller_offline.spec --clean --noconfirm
+
+      - name: Bundle voices into dist
+        working-directory: ${{ steps.setdir.outputs.tts_app }}
+        run: |
+          $voices = "$env:USERPROFILE\.voicecraft_tts\piper_voices"
+          $dest = "dist\VoiceCraft_TTS\voices"
+          if (Test-Path $voices) {
+            New-Item -ItemType Directory -Force -Path $dest
+            Copy-Item -Path "$voices\*" -Destination $dest -Recurse -Force
+            Write-Host "Bundled voices from $voices"
+          } else {
+            Write-Host "No voice cache found at $voices - skipping bundle"
+          }
+
+      - name: Install Inno Setup
+        run: |
+          choco install innosetup -y
+
+      - name: Build Installer
+        working-directory: ${{ steps.setdir.outputs.tts_app }}
+        run: |
+          $issPath = "bundle\installer.iss"
+          if (Test-Path $issPath) {
+            & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" $issPath
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Inno Setup failed, but portable .exe is still available."
+              exit 0
+            }
+          } else {
+            Write-Host "installer.iss not found - skipping installer creation"
+            exit 0
+          }
+
+      - name: Upload Portable EXE Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: VoiceCraft_Portable_${{ github.ref_name || github.event.inputs.version }}
+          path: ${{ steps.setdir.outputs.tts_app }}/dist/VoiceCraft_TTS/VoiceCraft_TTS.exe
+
+      - name: Upload Installer Artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: VoiceCraft_Setup_${{ github.ref_name || github.event.inputs.version }}
+          path: ${{ steps.setdir.outputs.tts_app }}/Output/VoiceCraft_Setup.exe
+
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            ${{ steps.setdir.outputs.tts_app }}/Output/VoiceCraft_Setup.exe
+            ${{ steps.setdir.outputs.tts_app }}/dist/VoiceCraft_TTS/VoiceCraft_TTS.exe
+          name: VoiceCraft TTS ${{ github.ref_name }}
+          body: |
+            🎙 VoiceCraft TTS — Windows Release
+
+            ### What's Included
+            - **VoiceCraft_Setup.exe** — Professional installer (recommended)
+            - **VoiceCraft_TTS.exe** — Portable single-file version
+            - 30+ pre-bundled Piper voices (offline-ready)
+            - Deepgram, Fish Audio, TopMedia AI cloud support (API keys required)
+            - Modern dark UI with mood & emotion controls
+
+            ### Install
+            1. Download `VoiceCraft_Setup.exe` below
+            2. Run it and click through the wizard
+            3. Launch from Desktop or Start Menu
+
+            ### First Use
+            - Select any voice with ✅ icon to use offline instantly
+            - Add API keys in Settings → API Keys to unlock cloud voices
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
